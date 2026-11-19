@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>note-tree · 笔记知识树</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3v5M12 8H6.5a2 2 0 0 0-2 2V19M12 8h5.5a2 2 0 0 1 2 2v9"/>
+        <circle cx="12" cy="3" r="1.6" fill="currentColor" stroke="none"/>
+        <circle cx="4.5" cy="19" r="1.6" fill="currentColor" stroke="none"/>
+        <circle cx="19.5" cy="19" r="1.6" fill="currentColor" stroke="none"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <h1>笔记知识树</h1>
+      <p>把散乱笔记整理成按学科领域划分的树状结构</p>
+    </div>
+  </div>
+  <!-- 主视图切换:笔记 / 知识框架。两者互斥,切换时各自渲染,数据同源。 -->
+  <div class="view-switch" id="mainViewSwitch" role="tablist" aria-label="主视图切换">
+    <button class="view-switch-btn is-active" type="button" role="tab" aria-selected="true"
+            data-mainview="notes" title="查看笔记原文与知识目录">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M5 3.5h9l5 5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/>
+        <path d="M14 3.5V9h5M8 13h8M8 17h6"/>
+      </svg>
+      <span>笔记</span>
+    </button>
+    <button class="view-switch-btn" type="button" role="tab" aria-selected="false"
+            data-mainview="framework" title="查看按学科组织的知识框架">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="9" y="2.5" width="6" height="4" rx="1"/>
+        <rect x="2" y="17.5" width="6" height="4" rx="1"/>
+        <rect x="16" y="17.5" width="6" height="4" rx="1"/>
+        <path d="M12 6.5v5M5 17.5v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/>
+      </svg>
+      <span>知识框架</span>
+    </button>
+  </div>
+
+  <div class="topbar-actions">
+    <!-- 搜索入口:快捷键可能被浏览器抢走(Ctrl+L 是浏览器「聚焦地址栏」),
+         所以除了快捷键,顶栏还给一个常驻按钮 -->
+    <button class="topbar-search" id="btnSearch" type="button"
+            title="打开独立搜索窗口(可贴在桌面;全局热键 Ctrl+Shift+Space)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+      </svg>
+      <span>搜索笔记</span>
+      <kbd>独立窗口</kbd>
+    </button>
+    <span class="conn" id="connBadge"><i></i><span id="connText">检测中</span></span>
+  </div>
+</header>
+
+<main class="shell">
+
+  <!-- ============ 左栏:控制面板 ============ -->
+  <aside class="panel" id="panel">
+
+    <button class="panel-collapse" id="btnPanelCollapse" type="button"
+            aria-expanded="true" aria-label="收纳左侧模块" title="收纳左侧模块">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m14 6-6 6 6 6"/>
+      </svg>
+      <span class="panel-collapse-label">收纳</span>
+    </button>
+
+    <!-- 模型接入:只显示状态,不暴露任何可读凭据。
+         API Key 只能通过命令行配置(note-tree config --set),页面上没有输入框、
+         也没有「显示/隐藏」按钮 —— 屏幕共享、截图、录屏都拿不到明文 key。 -->
+    <section class="block">
+      <div class="block-head">
+        <h2>模型接入</h2>
+        <span class="tag" id="configTag">检测中</span>
+      </div>
+      <p class="hint" id="configHint">正在检测模型配置…</p>
+    </section>
+
+    <!-- 文件来源 -->
+    <section class="block">
+      <div class="block-head">
+        <h2>笔记来源</h2>
+        <span class="tag" id="fileTag">0 个文件</span>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab is-active" data-tab="upload" role="tab" type="button">上传文件</button>
+        <button class="tab" data-tab="path" role="tab" type="button">本机路径</button>
+      </div>
+
+      <div class="tab-panel is-active" data-panel="upload">
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" multiple accept=".md,.txt" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 16V4M12 4 7.5 8.5M12 4l4.5 4.5"/>
+            <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+          </svg>
+          <strong>点击选择,或拖拽文件到此处</strong>
+          <span>支持 .md 与 .txt,可多选</span>
+        </label>
+      </div>
+
+      <div class="tab-panel" data-panel="path">
+        <div class="field">
+          <label for="pathInput">本机目录或文件路径</label>
+          <input id="pathInput" type="text" placeholder="D:\Notes 或 D:\Notes\a.md" autocomplete="off" spellcheck="false">
+          <p class="hint">由后端直接读取,可递归扫描子目录</p>
+        </div>
+        <button class="btn btn-ghost btn-block" id="btnAddPath" type="button">加入待处理列表</button>
+      </div>
+
+      <ul class="filelist" id="fileList"></ul>
+
+      <div class="btn-row">
+        <button class="btn btn-primary btn-block" id="btnOrganize" type="button" disabled>
+          <span class="btn-label">开始整理</span>
+        </button>
+        <button class="btn btn-ghost" id="btnClearFiles" type="button" disabled>清空</button>
+        <button class="btn btn-ghost" id="btnMock" type="button" title="不联网,用内置假模型跑通流程">离线试跑</button>
+      </div>
+      <p class="status" id="runStatus" role="status"></p>
+    </section>
+
+    <!-- 笔记库 -->
+    <section class="block">
+      <div class="block-head">
+        <h2>笔记库</h2>
+        <span class="tag" id="libraryTag">空</span>
+      </div>
+      <p class="hint">整理结果累积保存在本机。再上传新笔记是<b>并入</b>已有体系,不会覆盖旧内容。</p>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="btnViewLibrary" type="button">查看笔记库</button>
+      </div>
+      <p class="status" id="libraryStatus" role="status"></p>
+    </section>
+  </aside>
+
+  <!-- ============ 右栏:结果 ============ -->
+  <section class="stage" id="stage">
+
+    <!-- 空状态 -->
+    <div class="empty" id="emptyState">
+      <div class="empty-art" aria-hidden="true">
+        <svg viewBox="0 0 120 90" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M60 12v14M60 26H30a6 6 0 0 0-6 6v40M60 26h30a6 6 0 0 1 6 6v40"/>
+          <rect x="48" y="4" width="24" height="12" rx="4"/>
+          <rect x="10" y="66" width="34" height="14" rx="5"/>
+          <rect x="76" y="66" width="34" height="14" rx="5"/>
+        </svg>
+      </div>
+      <h2>还没有生成知识树</h2>
+      <p>在左侧填写模型接入信息,上传或指定笔记目录,然后点「开始整理」。<br>
+         不同学科领域会分成<strong>独立的树</strong>,例如 C++ 与网络空间安全各成一棵。<br>
+         结果会累积进笔记库,之后再上传新笔记只会<strong>并入</strong>,不会覆盖旧内容。</p>
+    </div>
+
+    <!-- 加载状态 -->
+    <div class="loading" id="loadingState" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <h2 id="loadingTitle">正在整理…</h2>
+      <ul class="logs" id="logList"></ul>
+    </div>
+
+    <!-- 错误状态 -->
+    <div class="errorbox" id="errorState" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.2v.2"/>
+      </svg>
+      <div>
+        <h2>出错了</h2>
+        <p id="errorText"></p>
+      </div>
+    </div>
+
+    <!-- 结果 -->
+    <div class="result" id="resultState" hidden>
+     <!-- 笔记视图:原文阅读 + 目录 + 操作条(即「除去知识框架的该页内容」) -->
+     <div class="notes-view" id="notesView">
+      <div class="result-head">
+        <div class="stats" id="stats"></div>
+        <div class="result-actions">
+          <button class="btn btn-ghost btn-chip" id="btnKeyPanel" type="button">
+            重点速览<span class="chip-count" id="keyCount">0</span>
+          </button>
+          <button class="btn btn-ghost btn-chip" id="btnMergePanel" type="button">
+            本轮并入<span class="chip-count" id="mergeCount" hidden>0</span>
+          </button>
+          <button class="btn btn-ghost btn-chip" id="btnFixPanel" type="button">
+            英文修正<span class="chip-count" id="fixCount" hidden>0</span>
+          </button>
+          <button class="btn btn-ghost btn-chip" id="btnSourcePanel" type="button">
+            来源<span class="chip-count" id="sourceCount" hidden>0</span>
+          </button>
+          <div class="seg" role="tablist">
+            <button class="seg-btn is-active" data-view="tree" type="button">树状图</button>
+            <button class="seg-btn" data-view="outline" type="button">条目清单</button>
+          </div>
+          <button class="btn btn-ghost" id="btnDownloadMd" type="button">下载 Markdown</button>
+          <button class="btn btn-ghost" id="btnDownloadJson" type="button">下载 JSON</button>
+        </div>
+      </div>
+
+      <!-- 主体:条目目录 + 笔记原文阅读区 -->
+      <div class="workspace" id="workspace">
+        <!-- 左:条目目录 -->
+        <nav class="navpane" id="navPane" aria-label="知识目录">
+          <div class="navpane-head">
+            <span class="navpane-title">目录</span>
+            <label class="switch switch-sm">
+              <input type="checkbox" id="onlyKey">
+              <span class="switch-track"><span class="switch-dot"></span></span>
+              <span class="switch-label">只看重点</span>
+            </label>
+          </div>
+          <div class="navpane-body" id="navList"></div>
+        </nav>
+
+        <!-- 右:笔记原文阅读区(主角) -->
+        <section class="reader" id="reader">
+          <div class="reader-head">
+            <div class="reader-tabs" id="readerTabs" role="tablist"></div>
+            <div class="reader-actions">
+              <button class="reader-reformat" id="btnEditSource" type="button" title="编辑当前显示的原文或排版稿">✎ 编辑</button>
+              <button class="reader-reformat" id="btnReformat" type="button" title="用 AI 重新排版当前文章" aria-label="重新排版">↻ 重新排版</button>
+            </div>
+          </div>
+          <div class="reader-body" id="readerBody">
+            <p class="reader-empty">左侧选一篇笔记开始阅读</p>
+          </div>
+        </section>
+      </div>
+
+      <div class="outline" id="outline" hidden></div>
+     </div><!-- /.notes-view -->
+
+     <!-- 知识框架视图:不同学科各自一棵独立分支树,点击条目右侧弹详情 -->
+     <section class="framework-view" id="frameworkView" hidden aria-label="知识框架">
+       <header class="fw-head">
+         <div>
+           <p class="fw-kicker">KNOWLEDGE MAP</p>
+           <h2 class="fw-title">知识框架</h2>
+         </div>
+         <p class="fw-meta" id="fwMeta"></p>
+       </header>
+       <div class="fw-body" id="fwBody"></div>
+     </section>
+
+      <!-- 抽屉:本轮并入 / 英文修正 / 来源清单 -->
+      <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+      <aside class="drawer" id="drawer" hidden aria-label="详情面板">
+        <div class="drawer-head">
+          <h3 id="drawerTitle">详情</h3>
+          <button class="drawer-close" id="drawerClose" type="button" aria-label="关闭">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="drawer-body" id="drawerBody"></div>
+      </aside>
+
+      <!-- 重点速览浮层 -->
+      <div class="popover-backdrop" id="keyBackdrop" hidden></div>
+      <div class="popover" id="keyPopover" hidden role="dialog" aria-label="重点速览">
+        <div class="popover-head">
+          <h3>重点速览</h3>
+          <div class="popover-actions">
+            <button class="btn btn-ghost btn-sm" id="btnKeyInTree" type="button">在框架中查看</button>
+            <button class="drawer-close" id="keyClose" type="button" aria-label="关闭">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="popover-body" id="keyList"></div>
+      </div>
+
+      <!-- 确认对话框:删除等不可逆操作前的二次确认 -->
+      <div class="popover-backdrop" id="confirmBackdrop" hidden></div>
+      <div class="confirm" id="confirmDialog" hidden role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+        <h3 id="confirmTitle">确认操作</h3>
+        <p class="confirm-body" id="confirmBody"></p>
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" id="confirmCancel" type="button">取消</button>
+          <button class="btn btn-danger" id="confirmOk" type="button">删除</button>
+        </div>
+      </div>
+
+      <!-- 搜索面板:Ctrl+L 唤起,跨全部笔记查关键词 -->
+      <div class="popover-backdrop" id="searchBackdrop" hidden></div>
+      <div class="search-panel" id="searchPanel" hidden role="dialog" aria-modal="true" aria-label="搜索笔记">
+        <div class="search-head">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+          </svg>
+          <input id="searchInput" type="text" placeholder="搜索全部笔记…（如 eval、指针、SQL 注入）"
+                 autocomplete="off" spellcheck="false" aria-label="搜索关键词">
+          <kbd class="search-kbd">Esc</kbd>
+        </div>
+        <div class="search-meta" id="searchMeta" hidden></div>
+        <div class="search-results" id="searchResults"></div>
+        <div class="search-foot">
+          <span>↑↓ 选择 · Enter 打开 · Esc 关闭</span>
+          <button class="search-openwindow" id="btnSearchWindow" type="button">独立窗口打开</button>
+        </div>
+      </div>
+
+      <!-- 选区荧光笔工具条 -->
+      <div class="marker-bar" id="markerBar" hidden role="toolbar" aria-label="荧光笔">
+        <button class="marker-swatch" data-color="sun" type="button" title="暖黄 (Ctrl+Alt+1)" aria-label="暖黄"></button>
+        <button class="marker-swatch" data-color="mint" type="button" title="薄荷 (Ctrl+Alt+2)" aria-label="薄荷"></button>
+        <button class="marker-swatch" data-color="sky" type="button" title="天蓝 (Ctrl+Alt+3)" aria-label="天蓝"></button>
+        <button class="marker-swatch" data-color="rose" type="button" title="淡粉 (Ctrl+Alt+4)" aria-label="淡粉"></button>
+        <span class="marker-sep"></span>
+        <button class="marker-remove" id="markerRemove" type="button" title="取消标记">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <span>取消</span>
+        </button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
